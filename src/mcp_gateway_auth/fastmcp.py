@@ -1,4 +1,4 @@
-"""FastMCP integration: `FastMCP(..., auth=GatewayAuth(audience="reghub"))`."""
+"""FastMCP integration: `FastMCP(..., auth=GatewayAuth(audience="dochub"))`."""
 
 from __future__ import annotations
 

@@ -4,14 +4,14 @@ FastMCP:
     from mcp_gateway_auth import current_principal
     from mcp_gateway_auth.fastmcp import GatewayAuth
 
-    mcp = FastMCP("reghub", auth=GatewayAuth(audience="reghub"))
+    mcp = FastMCP("dochub", auth=GatewayAuth(audience="dochub"))
 
     @mcp.tool
     def search(query: str) -> str:
         user = current_principal()   # Principal(sub, preferred_username, roles, azp)
 
 Anything else:
-    principal = verify(token, audience="reghub")
+    principal = verify(token, audience="dochub")
 """
 
 from __future__ import annotations

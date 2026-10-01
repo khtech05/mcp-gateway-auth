@@ -92,7 +92,7 @@ def test_other_audience_rejected(tmp_path: Path) -> None:
     """Criterion 5: a token for another service is refused."""
     _, verifier, keys = make(tmp_path)
     with pytest.raises(InvalidAudience):
-        verifier.verify(issue(keys, audience="reghub"), "demo")
+        verifier.verify(issue(keys, audience="dochub"), "demo")
 
 
 def test_missing_and_garbage(tmp_path: Path) -> None:
