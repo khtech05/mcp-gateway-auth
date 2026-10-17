@@ -6,7 +6,9 @@ from pathlib import Path
 import httpx
 import jwt
 import pytest
+from conftest import generate_key_file, issue, jwks
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
 from mcp_gateway_auth import (
     GatewayVerifier,
     InvalidAudience,
@@ -17,21 +19,6 @@ from mcp_gateway_auth import (
     MissingToken,
     TokenExpired,
     UnknownKey,
-)
-
-from mcp_gateway.keycloak import KeycloakIdentity
-from mcp_gateway.signing import InternalTokenIssuer, KeyRing, generate_key_file
-
-IDENTITY = KeycloakIdentity(
-    sub="user-1",
-    preferred_username="alice",
-    azp="claude",
-    roles=("mcp-demo",),
-    name="Алиса Иванова",
-    given_name="Алиса",
-    family_name="Иванова",
-    email="alice@kh-tech.ru",
-    groups=("/Разработка/AI", "/Продажи"),
 )
 
 
@@ -47,7 +34,7 @@ class GatewayJWKS:
         if not self.available:
             raise httpx.ConnectError("down", request=request)
         self.requests += 1
-        return httpx.Response(200, json=KeyRing.load(self.directory).jwks())
+        return httpx.Response(200, json=jwks(self.directory))
 
 
 def make(tmp_path: Path, **cache_kwargs: object) -> tuple[GatewayJWKS, GatewayVerifier, Path]:
@@ -60,10 +47,6 @@ def make(tmp_path: Path, **cache_kwargs: object) -> tuple[GatewayJWKS, GatewayVe
         **cache_kwargs,
     )  # type: ignore[arg-type]
     return server, GatewayVerifier(jwks=cache), keys
-
-
-def issue(keys: Path, audience: str = "demo", **kw: object) -> str:
-    return InternalTokenIssuer(KeyRing.load(keys), **kw).issue(IDENTITY, audience)  # type: ignore[arg-type]
 
 
 def test_valid_token(tmp_path: Path) -> None:
@@ -112,7 +95,7 @@ def test_expired_with_leeway(tmp_path: Path) -> None:
 
 
 def test_foreign_signer_and_issuer(tmp_path: Path) -> None:
-    _, verifier, _ = make(tmp_path)
+    _, verifier, keys = make(tmp_path)
     now = int(time.time())
     claims = {"iss": "mcp-gateway", "aud": "demo", "sub": "x", "iat": now, "exp": now + 60}
     forged = jwt.encode(
@@ -124,19 +107,9 @@ def test_foreign_signer_and_issuer(tmp_path: Path) -> None:
         verifier.verify(
             jwt.encode(claims, "k" * 32, algorithm="HS256", headers={"kid": "2026-01-01"}), "demo"
         )
-    real = (tmp_path / "keys" / "2026-01-01.pem").read_bytes()
-    from cryptography.hazmat.primitives.serialization import load_pem_private_key
-
+    # Настоящий ключ шлюза, но чужой `iss`.
     with pytest.raises(InvalidIssuer):
-        verifier.verify(
-            jwt.encode(
-                {**claims, "iss": "someone"},
-                load_pem_private_key(real, None),
-                algorithm="EdDSA",
-                headers={"kid": "2026-01-01"},
-            ),
-            "demo",
-        )
+        verifier.verify(issue(keys, issuer="someone"), "demo")
 
 
 def test_key_rotation_without_errors(tmp_path: Path) -> None:
